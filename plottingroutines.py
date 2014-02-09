@@ -16,6 +16,10 @@ def getColors(N):
         5
         >>> getColors(5)[4]
         (0.69411766529083252, 0.3490196168422699, 0.15686275064945221, 1.0)
+        >>> N=14
+        >>> c=getColors(N)
+        >>> plt.scatter(range(N),range(N),color=c)
+        >>> plt.show()
     '''
     clrs=[]
     cm = plt.get_cmap('Paired')
@@ -24,6 +28,7 @@ def getColors(N):
         #plt.plot(i,i,'x',color=clrs[i])
     clrs.pop(-2)
     return clrs
+
 def imshow(*args,**kwargs):
     plt.imshow(*args,**kwargs)
 
@@ -128,3 +133,8 @@ def loadStanFit(fname):
     out=pickle.load(f)
     f.close()
     return out
+def latinSquare(N=4):
+    U=np.zeros((2**(N),N),dtype=int)
+    for i in range(N):
+        U[:,i]= np.mod(np.arange(U.shape[0])/2**(N-1-i),2)
+    return U
