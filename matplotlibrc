@@ -103,7 +103,7 @@ lines.markeredgewidth  : 0.15     # the line width around the marker symbol
 # these font families has a default list of font names in decreasing
 # order of priority associated with them.  When text.usetex is False,
 # font.family may also be one or more concrete font names.
-#
+
 # The font.style property has three values: normal (or roman), italic
 # or oblique.  The oblique style will be used for italic, if it is not
 # present.
@@ -309,7 +309,7 @@ grid.linewidth   :   0.5     # in points
 # See http://matplotlib.org/api/figure_api.html#matplotlib.figure.Figure
 #figure.figsize   : 8, 6    # figure size in inches
 figure.dpi       : 200      # figure dots per inch
-#figure.facecolor : 0.75    # figure facecolor; 0.75 is scalar gray
+figure.facecolor : 1    # figure facecolor; 0.75 is scalar gray
 #figure.edgecolor : white   # figure edgecolor
 figure.autolayout : True  # When True, automatically adjust subplot
                             # parameters to make the plot fit the figure
