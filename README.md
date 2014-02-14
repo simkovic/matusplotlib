@@ -1,5 +1,8 @@
-matusplotlib
+matustools
 ============
+
+matusplotlib
+------------
 
 Pyplot routines customized for production of publication-quality figures.
 
