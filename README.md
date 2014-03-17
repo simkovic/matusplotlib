@@ -1,7 +1,10 @@
-matusplotlib
+matustools
 ============
 
-Pyplot routines customized for production of publication-quality figures.
+matusplotlib
+------------
+
+Matusplotlib offers Matplotlib routines customized for production of publication-quality figures.
 
 Ideally, one would use rc files to adjust default settings in pyplot. Unfortunately, at the moment several properties can't be customized in this way. This is solved by writing custom wrappers around the most popular pyplot functions. 
 
