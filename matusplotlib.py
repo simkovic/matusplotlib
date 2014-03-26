@@ -1,7 +1,6 @@
 import numpy as np
 import pylab as plt
 import matplotlib as mpl
-import brewer2mpl
 from scipy.stats import scoreatpercentile as sap
 import pickle,os
 
@@ -10,7 +9,9 @@ __all__ = ['getColors','errorbar','pystanErrorbar',
            'figure','subplot','subplot_annotate',
            'hist']
 CLR=(0.2, 0.5, 0.6)
-FIGCOL=[3.27,4.86,6.83] # size of figure columns
+# size of figure columns
+FIGCOL=[3.27,4.86,6.83] # plosone
+FIGCOL=[3.3,5, 7.1] # frontiers
 # TODO custom ppl style histogram
 def getColors(N):
     ''' creates set of colors for plotting
@@ -139,11 +140,12 @@ def pystanErrorbar(w):
     #ss=np.array(ss)
     for i in range(len(ss)):
         print sls[i], ss[i].mean(), 'CI [%.3f,%.3f]'%(sap(ss[i],2.5),sap(ss[i],97.5)) 
-def printCI(w,var,decimals=3):
+def printCI(w,var=None,decimals=3):
     def _print(b):
         d=np.round([b.mean(), sap(b,2.5),sap(b,97.5)],decimals).tolist()
         print var+' %.3f, CI %.3f, %.3f'%tuple(d) 
-    d=w[var]
+    if var is None: d=w;var='var'
+    else: d=w[var]
     if d.ndim==2:
         for i in range(d.shape[1]):
             _print(d[:,i])
