@@ -2,12 +2,13 @@ import numpy as np
 import pylab as plt
 import matplotlib as mpl
 from scipy.stats import scoreatpercentile as sap
+from scipy import stats
 import pickle,os
 
 __all__ = ['getColors','errorbar','pystanErrorbar',
            'saveStanFit','loadStanFit','printCI',
            'figure','subplot','subplot_annotate',
-           'hist']
+           'hist','histCI']
 CLR=(0.2, 0.5, 0.6)
 # size of figure columns
 FIGCOL=[3.27,4.86,6.83] # plosone
@@ -69,7 +70,41 @@ def hist(*args,**kwargs):
     if not kwargs.has_key('facecolor'): kwargs['facecolor']=CLR
     if not kwargs.has_key('edgecolor'): kwargs['edgecolor']='w'
     plt.hist(*args,**kwargs)
-    
+
+def histCI(*args,**kwargs):
+    '''
+        >>> x=np.random.randn(1000)
+        >>> bn=np.linspace(-3,3,41)
+        >>> histCI(x,bins=bn)
+    '''
+    if kwargs.has_key('plot'): plot=kwargs.pop('plot')
+    else: plot=True
+    if kwargs.has_key('alpha'): alpha=kwargs.pop('alpha')
+    else: alpha=0.05
+    a,b=np.histogram(*args,**kwargs)
+    m=b.size
+    n=args[0].shape[0]
+    c=stats.norm.ppf(alpha/(2.*m))/2.*(m/float(n))**0.5
+    l=np.square(np.maximum(np.sqrt(a)-c,0))
+    u=np.square(np.sqrt(a)+c)
+    if plot: plothistCI(a,b,l,u)
+    return a,b,l,u
+
+def plothistCI(a,b,l,u):
+    '''
+        >>> x=np.random.randn(1000)
+        >>> bn=np.linspace(-3,3,41)
+        >>> a,b,l,u=histCI(x,bins=bn)
+        >>> plothistCI(a,b,l,u)
+    '''
+    b=b[:-1]+np.diff(b)/2.
+    plt.plot(b,a,color=CLR)
+    x=np.concatenate([b,b[::-1]])
+    ci=np.concatenate([u,l[::-1]])
+    plt.gca().add_patch(plt.Polygon(np.array([x,ci]).T,
+                alpha=0.2,fill=True,fc='red',ec='red'))
+
+
 def subplot(*args):
     plt.subplot(*args)
     ax=plt.gca()
@@ -178,3 +213,39 @@ def ndsamples2latextable(data,decim=2):
         out+=ecol
     out+='\\hline\n\\end{tabular}\n\\end{table}'
     print out
+
+
+def ndarray2gif(path,array,duration=0.1,addblank=False):
+    '''
+    path - file path, including filename, excluding .gif
+    array - 3d numpy array, zeroth dim is the time axis,
+            dtype uint8 or float in [0,1]
+    duration - frame duration
+
+    Example:
+    
+    >>> im = np.zeros((200,200), dtype=np.uint8)
+    >>> im[10:30,:] = 100
+    >>> im[:,80:120] = 255
+    >>> im[-50:-40,:] = 50
+    >>> images = [im*1.0, im*0.8, im*0.6, im*0.4, im*0]
+    >>> images = [im, np.rot90(im,1), np.rot90(im,2), np.rot90(im,3), im*0]
+    >>> ndarray2gif('test',np.array(images), duration=0.5) 
+    '''
+    if array.dtype.type is np.float64 or array.dtype.type is np.float32:
+        array=np.uint8(255*array)
+    from PIL import Image
+    if addblank:
+        temp=np.zeros((array.shape[0]+1,array.shape[1],array.shape[2]),dtype=np.uint8)
+        temp[1:,:,:]=array
+        array=temp
+    for k in range(array.shape[0]):
+        I=Image.fromarray(array[k,:,:])
+        I.save('temp%04d.png'%k)
+    os.system('convert -delay %f temp*.png %s.gif'%(duration,path))
+    for k in range(array.shape[0]):
+        os.system('rm temp%04d.png'%k)
+
+
+
+    
