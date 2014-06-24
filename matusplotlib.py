@@ -8,7 +8,7 @@ import pickle,os
 __all__ = ['getColors','errorbar','pystanErrorbar',
            'saveStanFit','loadStanFit','printCI',
            'figure','subplot','subplot_annotate',
-           'hist','histCI']
+           'hist','histCI','plotCIttest1','plotCIttest2']
 CLR=(0.2, 0.5, 0.6)
 # size of figure columns
 FIGCOL=[3.27,4.86,6.83] # plosone
@@ -127,6 +127,35 @@ def subplot_annotate(loc='nw',nr=None):
             plt.ylim()[0]+ofs[1]*(plt.ylim()[1]-plt.ylim()[0]), 
             str(unichr(65+nr)),horizontalalignment='center',verticalalignment='center',
             fontdict={'weight':'bold'},fontsize=12)
+
+def _errorbar(out,x,clr='k'):
+    plt.plot([x,x],out[1:3],color=clr)
+    plt.plot([x,x],out[3:5],
+        color=clr,lw=3,solid_capstyle='round')
+    plt.plot([x],[out[0]],mfc=clr,mec=clr,ms=8,marker='_',mew=2)
+
+def plotCIttest1(y,x=0,alpha=0.05,clr='k'):
+    m=y.mean();df=y.size-1
+    se=y.std()/y.size**0.5
+    cil=stats.t.ppf(alpha/2.,df)*se
+    cii=stats.t.ppf(0.25,df)*se
+    out=[m,m-cil,m+cil,m-cii,m+cii]
+    _errorbar(out,x=x,clr=clr)
+    return out
+    
+def plotCIttest2(y1,y2,x=0,alpha=0.05,clr='k'):
+    n1=float(y1.size);n2=float(y2.size);
+    v1=y1.var();v2=y2.var()
+    m=y2.mean()-y1.mean()
+    s12=(((n1-1)*v1+(n2-1)*v2)/(n1+n2-2))**0.5
+    se=s12*(1/n1+1/n2)**0.5
+    df= (v1/n1+v2/n2)**2 / ( (v1/n1)**2/(n1-1)+(v2/n2)**2/(n2-1)) 
+    cil=stats.t.ppf(alpha/2.,df)*se
+    cii=stats.t.ppf(0.25,df)*se
+    out=[m,m-cil,m+cil,m-cii,m+cii]
+    _errorbar(out,x=x,clr=clr)
+    return out
+    
 def errorbar(y,clr=CLR,x=None,labels=None):
     ''' customized error bars
         y - NxM ndarray containing results of
@@ -144,23 +173,22 @@ def errorbar(y,clr=CLR,x=None,labels=None):
         x=np.arange(0,y.shape[1])
     ax=plt.gca()
     for i in range(d.shape[1]):
-        out.append([d[:,i].mean(),sap(d[:,i],2.5),sap(d[:,i],97.5)])
-        plt.plot([x[i],x[i]],[sap(d[:,i],2.5),sap(d[:,i],97.5) ],color=clr)
-        plt.plot([x[i],x[i]],[sap(d[:,i],25),sap(d[:,i],75) ],
-                 color=clr,lw=3,solid_capstyle='round')
-        plt.plot([x[i]],[d[:,i].mean()],mfc=clr,mec=clr,ms=8,marker='_',mew=2)
+        out.append([d[:,i].mean(),sap(d[:,i],2.5),sap(d[:,i],97.5),
+                    sap(d[:,i],25),sap(d[:,i],75)])
+        _errorbar(out[-1],x=x[i],clr=clr)
     ax.set_xticks(x)
     if not labels is None: ax.set_xticklabels(labels)
     plt.xlim([np.floor(x[0]-1),np.ceil(x[-1]+1)])
     return np.array(out)
 
-def pystanErrorbar(w):
+def pystanErrorbar(w,keys=None):
     """ plots errorbars for variables in fit
         fit - dictionary with data extracted from Pystan.StanFit instance 
     """
     kk=0
     ss=[];sls=[]
-    for k in w.keys()[:-1]:
+    if keys is None: keys=w.keys()[:-1]
+    for k in keys:
         d= w[k]
         if d.ndim==1:
             ss.append(d);sls.append(k)
