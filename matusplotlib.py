@@ -274,6 +274,16 @@ def ndarray2gif(path,array,duration=0.1,addblank=False):
     for k in range(array.shape[0]):
         os.system('rm temp%04d.png'%k)
 
+def plotGifGrid(dat,fn='test'):
+    offset=8 # nr pixels for border padding
+    rows=len(dat); cols=len(dat[0])
+    h=dat[0][0].shape[0];w=dat[0][0].shape[1];t=dat[0][0].shape[2]
+    R=np.ones((t+1,(h+offset)*rows,(w+offset)*cols),dtype=np.float32)
 
-
+    for row in range(rows):
+        for col in range(cols):
+            i=((offset+h)*row+offset/2,(offset+w)*col+offset/2)
+            temp=np.rollaxis(dat[row][col],2)
+            R[1:,i[0]:i[0]+h,i[1]:i[1]+w]=temp
+    ndarray2gif(fn,np.uint8(R*255),duration=0.1)
     
