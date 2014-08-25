@@ -213,9 +213,11 @@ def printCI(w,var=None,decimals=3):
         for i in range(d.shape[1]):
             _print(d[:,i])
     elif d.ndim==1: _print(d)
+    
                 
 def saveStanFit(fit,fname='test'):
-    path = os.getcwd()+os.path.sep+'standata'+os.path.sep+fname
+    if fname.count(os.path.sep): path=fname
+    else: path = os.getcwd()+os.path.sep+'standata'+os.path.sep+fname
     w=fit.extract()
     f=open(path,'w')
     pickle.dump(w,f)
