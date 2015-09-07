@@ -2,17 +2,22 @@ import numpy as np
 import pylab as plt
 import matplotlib as mpl
 from scipy.stats import scoreatpercentile as sap
+from scipy.special import erfinv
 from scipy import stats
 import pickle,os
+from PIL import ImageFont, ImageDraw, Image
 
 __all__ = ['getColors','errorbar','pystanErrorbar',
-           'saveStanFit','loadStanFit','printCI',
-           'figure','subplot','subplot_annotate',
-           'hist','histCI','plotCIttest1','plotCIttest2']
+           'saveStanFit','loadStanFit','printCI','formatAxes',
+           'figure','subplot','subplotAnnotate',
+           'hist','histCI','plotCIttest1','plotCIttest2',
+           'ndarray2latextable','ndarray2gif','plotGifGrid',
+           'str2img']
 CLR=(0.2, 0.5, 0.6)
 # size of figure columns
 FIGCOL=[3.27,4.86,6.83] # plosone
 FIGCOL=[3.3,5, 7.1] # frontiers
+FIGCOL=[2.87,4.3,5.74]# peerj
 # TODO custom ppl style histogram
 def getColors(N):
     ''' creates set of colors for plotting
@@ -39,6 +44,16 @@ def imshow(*args,**kwargs):
 
 #plt.ion()
 #imshow(np.array([[1,2,3],[2,1,2],[3,1,2]]))
+
+def formatAxes(ax):
+    ax.xaxis.set_ticks_position('none')
+    ax.yaxis.set_ticks_position('none')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_axisbelow(True)
+    ax.grid(False,axis='x')
+    ax.grid(True,axis='y')
+    
 def figure(**kwargs):
     ''' wrapper around matplotlib.figure
         additionally supports following kwargs
@@ -51,15 +66,9 @@ def figure(**kwargs):
         if kwargs.has_key('aspect'): h=kwargs.pop('aspect')*w
         else: h=w
         kwargs['figsize']=(w,h)
-    plt.figure(**kwargs)
-    ax=plt.gca()
-    ax.xaxis.set_ticks_position('none')
-    ax.yaxis.set_ticks_position('none')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_axisbelow(True)
-    plt.grid(False,axis='x')
-    plt.grid(True,axis='y')
+    fig=plt.figure(**kwargs)
+    formatAxes(plt.gca())
+    return fig
 
 def hist(*args,**kwargs):
     '''
@@ -104,18 +113,67 @@ def plothistCI(a,b,l,u):
     plt.gca().add_patch(plt.Polygon(np.array([x,ci]).T,
                 alpha=0.2,fill=True,fc='red',ec='red'))
 
+def kernelreg(x,y,xnew,ciwidth=0.5,Kwidth=1):
+    '''
+        Nadaray-Watson kernel estimator 
+        from Wasserman(2004) chap 20.4
+        x - predictor NxK1x...xKd ndarray
+        y - outcome, N-length ndarray
+        xnew - predictor for prediction MxK1x...xKd ndarray
+        returns list of
+            estimated outcome for xnew, M-length ndarray
+            lower confidence interval
+            upper confidence interval
+            leave-one-out crossvalidation score
+        example:
+        >>> x=np.linspace(-10,10,200)
+        >>> x+=np.random.randn(x.size)*0.1
+        >>> x=np.sort(x)
+        >>> y=np.sin(x)+np.random.randn(x.size)
+        >>> xnew=np.linspace(-10,10,1000)
+        >>> for k in [0.05,0.5,1,2,5,10]:
+        >>>     plt.figure()
+        >>>     plt.plot(x,y,'.')
+        >>>     ynew,lcf,ucf,J=kernelreg(x,y,xnew,Kwidth=k)
+        >>>     plt.plot(xnew,ynew)
+        >>>     plt.plot(xnew,lcf,'r')
+        >>>     plt.plot(xnew,ucf,'r')
+        >>>     plt.title('h=%.01f, J=%.01f'%(k,J))
+    '''
+    K=lambda x: (2*np.pi)**-0.5*np.exp(-np.square(x)/2.)
+    xlist=x.tolist();N=len(xlist)
+    xnlist=xnew.tolist();M=len(xnlist)
+    ynew=np.zeros(M)*np.nan
+    w=np.zeros((M,N))
+    for i1 in range(M):
+        for i2 in range(N):
+            d=np.linalg.norm(xnlist[i1]-xlist[i2])
+            w[i1,i2]=K((d)/float(Kwidth))
+    for i1 in range(M):
+        ynew[i1]=w[i1,:].dot(y)/w[i1,:].sum()
+    sigma=np.square(np.diff(y))
+    sigma= (sigma.sum()/float(2*sigma.size))**0.5
+    se=sigma*np.sqrt(np.square(w).sum(1))
+    rng=0
+    w=np.zeros((N,N))
+    r=np.zeros(N)*np.nan
+    for i1 in range(N):
+        for i2 in range(N):
+            d=np.linalg.norm(xnlist[i1]-xlist[i2])
+            if d>rng: rng=d
+            w[i1,i2]=K((d)/float(Kwidth))
+    for i1 in range(N):
+        r[i1]=w[i1,:].dot(y)/w[i1,:].sum()
+    J=np.square((y-r)/(1-K(0)/w.sum(axis=1))).sum()
+    q=erfinv(0.5*(1+ciwidth**(3*Kwidth/rng)))
+    return ynew, ynew-q*se, ynew+q*se,J
 
 def subplot(*args):
-    plt.subplot(*args)
-    ax=plt.gca()
-    ax.xaxis.set_ticks_position('none')
-    ax.yaxis.set_ticks_position('none')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.set_axisbelow(True)
-    plt.grid(False,axis='x')
-    plt.grid(True,axis='y')
-def subplot_annotate(loc='nw',nr=None):
+    ax=plt.subplot(*args)
+    formatAxes(ax)
+    return ax
+
+def subplotAnnotate(loc='nw',nr=None,clr='k'):
     if type(loc) is list and len(loc)==2: ofs=loc
     elif loc is 'nw': ofs=[0.1,0.9]
     elif loc is 'sw': ofs=[0.1,0.1]
@@ -126,13 +184,23 @@ def subplot_annotate(loc='nw',nr=None):
     plt.text(plt.xlim()[0]+ofs[0]*(plt.xlim()[1]-plt.xlim()[0]),
             plt.ylim()[0]+ofs[1]*(plt.ylim()[1]-plt.ylim()[0]), 
             str(unichr(65+nr)),horizontalalignment='center',verticalalignment='center',
-            fontdict={'weight':'bold'},fontsize=12)
+            fontdict={'weight':'bold'},fontsize=12,color=clr)
 
 def _errorbar(out,x,clr='k'):
     plt.plot([x,x],out[1:3],color=clr)
     plt.plot([x,x],out[3:5],
         color=clr,lw=3,solid_capstyle='round')
     plt.plot([x],[out[0]],mfc=clr,mec=clr,ms=8,marker='_',mew=2)
+
+def _horebar(d,xs,clr):
+    ''' code snippet for horizontal errorbar'''
+    for i in range(d.shape[1]):
+        x=xs[i]
+        plt.plot([sap(d[:,i],2.5),sap(d[:,i],97.5)],[x,x],color=clr)
+        plt.plot([sap(d[:,i],25),sap(d[:,i],75)],[x,x],
+            color=clr,lw=3,solid_capstyle='round')
+        plt.plot([np.median(d[:,i])],[x],mfc=clr,mec=clr,ms=8,marker='|',mew=2)
+    plt.gca().set_yticks(xs)
 
 def plotCIttest1(y,x=0,alpha=0.05,clr='k'):
     m=y.mean();df=y.size-1
@@ -173,12 +241,12 @@ def errorbar(y,clr=CLR,x=None,labels=None):
         x=np.arange(0,y.shape[1])
     ax=plt.gca()
     for i in range(d.shape[1]):
-        out.append([d[:,i].mean(),sap(d[:,i],2.5),sap(d[:,i],97.5),
+        out.append([np.median(d[:,i]),sap(d[:,i],2.5),sap(d[:,i],97.5),
                     sap(d[:,i],25),sap(d[:,i],75)])
         _errorbar(out[-1],x=x[i],clr=clr)
     ax.set_xticks(x)
     if not labels is None: ax.set_xticklabels(labels)
-    plt.xlim([np.floor(x[0]-1),np.ceil(x[-1]+1)])
+    plt.xlim([np.floor(np.min(x)-1),np.ceil(np.max(x)+1)])
     return np.array(out)
 
 def pystanErrorbar(w,keys=None):
@@ -204,15 +272,18 @@ def pystanErrorbar(w,keys=None):
     for i in range(len(ss)):
         print sls[i], ss[i].mean(), 'CI [%.3f,%.3f]'%(sap(ss[i],2.5),sap(ss[i],97.5)) 
 def printCI(w,var=None,decimals=3):
+    sfmt=' {:.{:d}f} [{:.{:d}f},{:.{:d}f}]'
     def _print(b):
-        d=np.round([b.mean(), sap(b,2.5),sap(b,97.5)],decimals).tolist()
-        print var+' %.3f, CI %.3f, %.3f'%tuple(d) 
+        d=np.round([np.median(b), sap(b,2.5),sap(b,97.5)],decimals).tolist()
+        print sfmt.format(d[0],decimals,d[1],decimals,d[2],decimals)
+        #print var+' %.3f, CI %.3f, %.3f'%tuple(d) 
     if var is None: d=w;var='var'
     else: d=w[var]
     if d.ndim==2:
         for i in range(d.shape[1]):
             _print(d[:,i])
     elif d.ndim==1: _print(d)
+    
     
                 
 def saveStanFit(fit,fname='test'):
@@ -223,12 +294,31 @@ def saveStanFit(fit,fname='test'):
     pickle.dump(w,f)
     f.close()
 def loadStanFit(fname):
-    path = os.getcwd()+os.path.sep+'standata'+os.path.sep+fname
-    f=open(path,'r')
+    f=open(fname,'r')
     out=pickle.load(f)
     f.close()
     return out
 
+def ndarray2latextable(array,decim=2):
+    ''' array - 2D numpy.ndarray with shape (rows,columns)
+        decim - decimal precision of float, use 0 for ints
+            should be int scalar or a list of list,len(decim)=nr cols
+    '''
+    ecol=' \\\\\n';shp=array.shape
+    out='\\begin{table}\n\\centering\n\\begin{tabular}{|l|'+shp[1]*'c|'+'}\n\\hline\n'
+    for i in range(shp[0]):
+        for j in range(shp[1]):
+            if type(decim) is list: dc=decim[j]
+            else: dc=decim
+            if dc==0: out+='%d'%int(array[i,j])
+            else:
+                flt='{: .%df}'%dc
+                out+=flt.format(np.round(array[i,j],dc))
+            if j<shp[1]-1: out+=' & '
+        out+=ecol
+    out+='\\hline\n\\end{tabular}\n\\end{table}'
+    print out
+    
 def ndsamples2latextable(data,decim=2):
     ''' data - 3D numpy.ndarray with shape (rows,columns,samples)'''
     elem='{: .%df} [{: .%df}, {: .%df}]'%(decim,decim,decim)
@@ -245,12 +335,15 @@ def ndsamples2latextable(data,decim=2):
     print out
 
 
-def ndarray2gif(path,array,duration=0.1,addblank=False):
+def ndarray2gif(path,array,duration=0.1,addblank=False,
+                plottime=False,snapshot=1,UC=255,LC=20):
     '''
-    path - file path, including filename, excluding .gif
+    path - file path, including filename and suffix,
+        supports .gif, .avi (lossless h264 codec)
     array - 3d numpy array, zeroth dim is the time axis,
             dtype uint8 or float in [0,1]
     duration - frame duration
+    snapshot - 0=first frame, 1=midframe, 2=last frame
 
     Example:
     
@@ -262,30 +355,91 @@ def ndarray2gif(path,array,duration=0.1,addblank=False):
     >>> images = [im, np.rot90(im,1), np.rot90(im,2), np.rot90(im,3), im*0]
     >>> ndarray2gif('test',np.array(images), duration=0.5) 
     '''
+    path,suf=path.rsplit('.')
     if array.dtype.type is np.float64 or array.dtype.type is np.float32:
         array=np.uint8(255*array)
-    from PIL import Image
+    if plottime:
+        shp=list(array.shape); shp[1]+=50;
+        T=np.ones(shp,dtype=np.uint8)*UC;T[:,:-50,:]=array
+        for f in [-1,0,1]:
+            T[:,-40:-10,shp[2]/10+f]=LC
+            T[:,-25+f,shp[2]/10:9*shp[2]/10]=LC
+            T[:,-40:-10,9*shp[2]/10+f]=LC
+            for ff in [3,5,7]: T[:,-35:-15,ff*shp[2]/10+f]=LC
+            for t in range(T.shape[0]):
+                T[t,-40:-10,int((1+float(8*t)/T.shape[0])*shp[2]/10.)+f]=LC
+        array=T
     if addblank:
         temp=np.zeros((array.shape[0]+1,array.shape[1],array.shape[2]),dtype=np.uint8)
         temp[1:,:,:]=array
-        array=temp
+        array=tem
+    if array.shape[1]%2==1: array=array[:,:-1,:]
+    if array.shape[2]%2==1: array=array[:,:,:-1]
     for k in range(array.shape[0]):
         I=Image.fromarray(array[k,:,:])
-        I.save('temp%04d.png'%k)
-    os.system('convert -delay %f temp*.png %s.gif'%(duration,path))
+        I.save('temp%04d.png'%k)   
+    if suf=='gif': os.system('convert -delay %f temp*.png %s.gif'%(duration,path))
+    elif suf=='avi':
+        cmd='avconv -r '+str(int(1/duration))+ ' -i temp%04d.png -c:v h264 '+path+'.avi'
+        print cmd
+        os.system(cmd)
+    else: raise ValueError
+    shp=array.shape[0]
+    os.system('cp temp%04d.png %s.png'%([0,shp/2,shp-1][snapshot],path))
     for k in range(array.shape[0]):
         os.system('rm temp%04d.png'%k)
 
-def plotGifGrid(dat,fn='test'):
-    offset=8 # nr pixels for border padding
-    rows=len(dat); cols=len(dat[0])
-    h=dat[0][0].shape[0];w=dat[0][0].shape[1];t=dat[0][0].shape[2]
-    R=np.ones((t+1,(h+offset)*rows,(w+offset)*cols),dtype=np.float32)
+def str2img(inp,size,fontpath="/usr/share/fonts/truetype/liberation/LiberationMono-Bold.ttf"):
+    image= Image.fromarray(np.zeros((size,1+int(np.round(size*2/3.*len(inp))))))
+    draw = ImageDraw.Draw(image)
+    font = ImageFont.truetype(fontpath,size)
+    draw.text((0,0), inp, font=font)
+    return np.asarray(image)
 
+def plotGifGrid(dat,fn='test',bcgclr=0,forclr=None,text=[],duration=0.1,
+                plottime=False,snapshot=False,F=68,P=64,tpG=False,tpL=False):
+    '''
+        text = [[text1,textsize1,posx1,posy1],[text2, ...
+    '''
+    if forclr==None: forclr=1-bcgclr
+    if forclr==bcgclr: forclr=1
+    offset=8 # nr pixels for border padding
+    if tpG: cols=len(dat); rows=len(dat[0])
+    else: rows=len(dat); cols=len(dat[0])
+    h=P;w=P;t=F
+    R=bcgclr*np.ones((t+1,(h+offset)*rows,(w+offset)*cols),
+                     dtype=np.float32)
     for row in range(rows):
         for col in range(cols):
             i=((offset+h)*row+offset/2,(offset+w)*col+offset/2)
-            temp=np.rollaxis(dat[row][col],2)
-            R[1:,i[0]:i[0]+h,i[1]:i[1]+w]=temp
-    ndarray2gif(fn,np.uint8(R*255),duration=0.1)
+            if tpG: temp=dat[col][row]
+            else: temp=dat[row][col]
+            #temp=np.rollaxis(dat[row][col].T,2)
+            for tt in range(F):
+                if temp.shape[0]==F: tempp=temp[tt,:,:]
+                elif temp.shape[1]==F: tempp=temp[:,tt,:]
+                elif temp.shape[2]==F: tempp=temp[:,:,tt]
+                else: raise ValueError
+                if tpL: tempp=tempp.T
+                R[1+tt,i[0]:i[0]+h,i[1]:i[1]+w]=tempp
+                
+    mnxy=[0,0]
+    for t in text:
+        t.append(str2img(t[0],t[1]))
+        shp=t[-1].shape
+        if mnxy[0]>t[2]-shp[0]/2-offset:mnxy[0]=t[2]-shp[0]/2-offset
+        if mnxy[1]>t[3]-shp[1]/2-offset:mnxy[1]=t[3]-shp[1]/2-offset
+    if np.any(np.array(mnxy)<0):
+        shp=list(R.shape); shp[1]-=mnxy[0];shp[2]-=mnxy[1]
+        T=np.ones(shp,dtype=np.float32)*bcgclr
+        T[:,-mnxy[0]:,-mnxy[1]:]=np.copy(R)
+        R=T
+    for t in text:
+        px,py=t[-1].nonzero()
+        R[:,px+t[2]+t[-1].shape[0]/2+offset,
+          py+t[3]+t[-1].shape[1]/2+offset]=forclr
+    ndarray2gif(fn,np.uint8(R*255),duration=duration,
+                plottime=plottime,snapshot=snapshot,
+                UC=np.uint8(bcgclr*255),LC=np.uint8(255-bcgclr*255))
     
+
