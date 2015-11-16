@@ -39,7 +39,7 @@ def imshow(*args,**kwargs):
 
 #plt.ion()
 #imshow(np.array([[1,2,3],[2,1,2],[3,1,2]]))
-def figure(**kwargs):
+def figure(*args,**kwargs):
     ''' wrapper around matplotlib.figure
         additionally supports following kwargs
         size - 1,2 or 3 respectively for small, medium, large width
@@ -51,7 +51,7 @@ def figure(**kwargs):
         if kwargs.has_key('aspect'): h=kwargs.pop('aspect')*w
         else: h=w
         kwargs['figsize']=(w,h)
-    plt.figure(**kwargs)
+    plt.figure(*args,**kwargs)
     ax=plt.gca()
     ax.xaxis.set_ticks_position('none')
     ax.yaxis.set_ticks_position('none')
@@ -135,6 +135,7 @@ def _errorbar(out,x,clr='k'):
     plt.plot([x],[out[0]],mfc=clr,mec=clr,ms=8,marker='_',mew=2)
 
 def plotCIttest1(y,x=0,alpha=0.05,clr='k'):
+    ''' single group t-test'''
     m=y.mean();df=y.size-1
     se=y.std()/y.size**0.5
     cil=stats.t.ppf(alpha/2.,df)*se
