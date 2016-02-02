@@ -12,7 +12,7 @@ __all__ = ['getColors','errorbar','pystanErrorbar',
            'figure','subplot','subplotAnnotate',
            'hist','histCI','plotCIttest1','plotCIttest2',
            'ndarray2latextable','ndarray2gif','plotGifGrid',
-           'str2img']
+           'str2img','plothistCI']
 CLR=(0.2, 0.5, 0.6)
 # size of figure columns
 FIGCOL=[3.27,4.86,6.83] # plosone
@@ -175,10 +175,11 @@ def subplot(*args):
 
 def subplotAnnotate(loc='nw',nr=None,clr='k'):
     if type(loc) is list and len(loc)==2: ofs=loc
-    elif loc is 'nw': ofs=[0.1,0.9]
-    elif loc is 'sw': ofs=[0.1,0.1]
-    elif loc is 'se': ofs=[0.9,0.1]
-    elif loc is 'ne': ofs=[0.9,0.9]
+    elif loc=='nw': ofs=[0.1,0.9]
+    elif loc=='sw': ofs=[0.1,0.1]
+    elif loc=='se': ofs=[0.9,0.1]
+    elif loc=='ne': ofs=[0.9,0.9]
+    else: raise ValueError('loc only supports values nw, sw, se and ne')
     ax=plt.gca()
     if nr is None: nr=ax.colNum*ax.numRows+ax.rowNum
     plt.text(plt.xlim()[0]+ofs[0]*(plt.xlim()[1]-plt.xlim()[0]),
@@ -236,9 +237,12 @@ def errorbar(y,clr=CLR,x=None,labels=None):
     '''
     out=[]
     d=np.array(y);
-    if x is None: x=np.arange(d.shape[1])
-    elif np.array(x).ndim!=1 or np.array(x).shape[0]!=y.shape[1]:
-        x=np.arange(0,y.shape[1])
+    if d.ndim<2: d=np.array(y,ndmin=2).T
+    if not x is None: x=np.array(x)
+    if x is None or x.size==0: x=np.arange(d.shape[1])
+    elif x.size==1: x=np.ones(d.shape[1])*x[0]
+    elif x.ndim!=1 or x.shape[0]!=d.shape[1]:
+        x=np.arange(0,d.shape[1])
     ax=plt.gca()
     for i in range(d.shape[1]):
         out.append([np.median(d[:,i]),sap(d[:,i],2.5),sap(d[:,i],97.5),
@@ -286,15 +290,22 @@ def printCI(w,var=None,decimals=3):
     
     
                 
-def saveStanFit(fit,fname='test'):
-    if fname.count(os.path.sep): path=fname
-    else: path = os.getcwd()+os.path.sep+'standata'+os.path.sep+fname
+def saveStanFit(fit,fname='test'):      
+    if fname.count(os.path.sep): path=''
+    else: path = os.getcwd()+os.path.sep+'standata'+os.path.sep
+    try: os.mkdir(path)
+    except: OSError
     w=fit.extract()
-    f=open(path,'w')
+    f=open(path+fname+'.stanfit','w')
     pickle.dump(w,f)
     f.close()
+    f=open(path+fname+'.check','w')
+    print >> f,fit
+    f.close()
 def loadStanFit(fname):
-    f=open(fname,'r')
+    if fname.count(os.path.sep): path=''
+    else: path = os.getcwd()+os.path.sep+'standata'+os.path.sep
+    f=open(path+fname+'.stanfit','r')
     out=pickle.load(f)
     f.close()
     return out
