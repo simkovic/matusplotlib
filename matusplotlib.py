@@ -54,7 +54,7 @@ def formatAxes(ax):
     ax.grid(False,axis='x')
     ax.grid(True,axis='y')
     
-def figure(**kwargs):
+def figure(*args,**kwargs):
     ''' wrapper around matplotlib.figure
         additionally supports following kwargs
         size - 1,2 or 3 respectively for small, medium, large width
@@ -66,7 +66,7 @@ def figure(**kwargs):
         if kwargs.has_key('aspect'): h=kwargs.pop('aspect')*w
         else: h=w
         kwargs['figsize']=(w,h)
-    fig=plt.figure(**kwargs)
+    fig=plt.figure(*args,**kwargs)
     formatAxes(plt.gca())
     return fig
 
@@ -204,6 +204,7 @@ def _horebar(d,xs,clr):
     plt.gca().set_yticks(xs)
 
 def plotCIttest1(y,x=0,alpha=0.05,clr='k'):
+    ''' single group t-test'''
     m=y.mean();df=y.size-1
     se=y.std()/y.size**0.5
     cil=stats.t.ppf(alpha/2.,df)*se
