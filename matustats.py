@@ -1,7 +1,7 @@
 import numpy as np
 from scipy import stats
 
-__all__=['lognorm','gamma','weibull']
+__all__=['lognorm','gamma','weibull','exgaus']
 def latinSquare(N=4):
     U=np.zeros((2**(N),N),dtype=int)
     for i in range(N):
@@ -22,10 +22,18 @@ def gamma(mu=1,sigma=1,phi=0):
     return stats.gamma(a=np.power(mu/sigma,2),scale=np.power(sigma,2)/mu,loc=-phi)
 
 def weibull(scale=1,shape=1,loc=0):
-    '''  pdf =shape* (x/scale+loc)**(shape-1)
+    '''  pdf =shape/scale* (x/scale+loc)**(shape-1)
         * exp(-(x/scale+loc)**shape)
     '''
     return stats.weibull_min(shape,scale=scale,loc=-loc)
+
+from scipy.special import erfc
+def exgaus(x,mu,sigma,lamda):
+    ''' Exponentially modiefied gaussian
+    	mu - gaus mean, sigma - gaus std, lambda - rate of expon
+    '''
+    l=lamda/2.
+    return l*np.exp(l*(mu+l*sigma**2/2-x))*stats.norm.cdf((x-mu-sigma**2*l)/sigma)
 
 def pcaEIG(A,highdim=None):
     """ performs principal components analysis 
@@ -76,13 +84,13 @@ def pcaNIPALS(K=5,tol=1e-4,verbose=False):
         numpy algebra
             
     '''
-    if verbose: print 'Mean centering columns'
+    if verbose: print('Mean centering columns')
     XmeanCenter(1)
     latent=[]
     for k in range(K):
         lam0=0;lam1=np.inf
         T=np.matrix(XgetColumn(k))
-        if verbose: print 'Computing PC ',k
+        if verbose: print('Computing PC ',k)
         h=0
         while abs(lam1-lam0)>tol and h<100:
             P=Xleftmult(T,True)
@@ -90,10 +98,25 @@ def pcaNIPALS(K=5,tol=1e-4,verbose=False):
             T=Xleftmult(P)
             lam0=lam1
             lam1=np.linalg.norm(T)
-            if verbose: print '\t Iteration '+str(h)+', Convergence =', abs(lam1-lam0)
+            if verbose: print('\t Iteration '+str(h)+', Convergence =', abs(lam1-lam0))
             h+=1
         latent.append(lam1)
         XminusOuterProduct(T,P)
         #np.save(inpath+'T%02d'%k,T)
         np.save(inpath+'coeffT%d'%k,P.T)
     np.save(inpath+'latent',latent)
+
+def invdigamma(x):
+    '''x=np.linspace(0,10,11)
+        plt.plot(x,invdigamma(digamma(x)))   
+    '''
+    from scipy.special import digamma, polygamma
+    m=x>=-2.22
+    y=m*(np.exp(x)+0.5)-(1-m)/(x-digamma(1))
+    y[np.isnan(y)]=1
+    print(y)
+    L=digamma(y)-x
+    while np.min(L)>1e-8:
+        y=y-L/polygamma(1,y)
+        L=digamma(y)-x
+    return y    

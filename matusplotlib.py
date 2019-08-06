@@ -5,10 +5,12 @@ from scipy.stats import scoreatpercentile as sap
 from scipy.special import erfinv
 from scipy import stats
 import pickle,os
+from sys import stdout
 from PIL import ImageFont, ImageDraw, Image
 
+
 __all__ = ['getColors','errorbar','pystanErrorbar',
-           'saveStanFit','loadStanFit','printCI','formatAxes',
+           'printCI','formatAxes',
            'figure','subplot','subplotAnnotate',
            'hist','histCI','plotCIttest1','plotCIttest2',
            'ndarray2latextable','ndarray2gif','plotGifGrid',
@@ -18,6 +20,15 @@ CLR=(0.2, 0.5, 0.6)
 FIGCOL=[3.27,4.86,6.83] # plosone
 FIGCOL=[3.3,5, 7.1] # frontiers
 FIGCOL=[2.87,4.3,5.74]# peerj
+FIGCOL=[3.3,5,7.1] # plosone new
+
+SMALL=6
+MEDIUM=9
+plt.rc('axes', titlesize=MEDIUM)     # fontsize of the axes title
+plt.rc('axes', labelsize=MEDIUM)    # fontsize of the x and y labels
+plt.rc('xtick', labelsize=SMALL)    # fontsize of the tick labels
+plt.rc('ytick', labelsize=SMALL)    # fontsize of the tick labels
+
 # TODO custom ppl style histogram
 def getColors(N):
     ''' creates set of colors for plotting
@@ -60,10 +71,10 @@ def figure(*args,**kwargs):
         size - 1,2 or 3 respectively for small, medium, large width
         aspect - [0,inf] height to width ratio 
     '''
-    if not kwargs.has_key('figsize'):
-        if kwargs.has_key('size'): w= FIGCOL[kwargs.pop('size')-1]
+    if not 'figsize' in kwargs:
+        if 'size' in kwargs: w= FIGCOL[kwargs.pop('size')-1]
         else: w=FIGCOL[0]
-        if kwargs.has_key('aspect'): h=kwargs.pop('aspect')*w
+        if 'aspect' in kwargs: h=kwargs.pop('aspect')*w
         else: h=w
         kwargs['figsize']=(w,h)
     fig=plt.figure(*args,**kwargs)
@@ -76,8 +87,8 @@ def hist(*args,**kwargs):
         >>> x=np.linspace(-30,30,60)
         >>> hist(dat,bins=x)
     '''
-    if not kwargs.has_key('facecolor'): kwargs['facecolor']=CLR
-    if not kwargs.has_key('edgecolor'): kwargs['edgecolor']='w'
+    if not 'facecolor' in kwargs: kwargs['facecolor']=CLR
+    if not 'edgecolor' in kwargs: kwargs['edgecolor']='w'
     plt.hist(*args,**kwargs)
 
 def histCI(*args,**kwargs):
@@ -86,9 +97,9 @@ def histCI(*args,**kwargs):
         >>> bn=np.linspace(-3,3,41)
         >>> histCI(x,bins=bn)
     '''
-    if kwargs.has_key('plot'): plot=kwargs.pop('plot')
+    if 'plot' in kwargs: plot=kwargs.pop('plot')
     else: plot=True
-    if kwargs.has_key('alpha'): alpha=kwargs.pop('alpha')
+    if 'alpha' in kwargs: alpha=kwargs.pop('alpha')
     else: alpha=0.05
     a,b=np.histogram(*args,**kwargs)
     m=b.size
@@ -98,6 +109,23 @@ def histCI(*args,**kwargs):
     u=np.square(np.sqrt(a)+c)
     if plot: plothistCI(a,b,l,u)
     return a,b,l,u
+def symhist(x1,x2,bins):
+    ''' symmetric histogram of two data sets
+        >>> symhist(np.random.randn(100),np.random.randn(100)+1,np.linspace(-3,4,15))
+        >>> plt.show()
+    '''
+    bw=bins[1]-bins[0]
+    a1=np.histogram(x1,bins=bins,normed=True)
+    plt.barh(bins[:-1],-a1[0],ec='w',fc='y',height=bw,lw=0.1)
+    a2=np.histogram(x2,bins=bins,normed=1)
+    plt.barh(bins[:-1],a2[0],ec='w',fc='y',height=bw,lw=0.1)
+    xmax=max(plt.xlim())
+    plt.xlim([-xmax,xmax])
+    plt.ylim([bins[0],bins[-1]])
+    ax=plt.gca()
+    #ax.set_xticklabels([])
+    #ax.set_yticklabels([])
+
 
 def plothistCI(a,b,l,u):
     '''
@@ -275,12 +303,12 @@ def pystanErrorbar(w,keys=None):
             plt.title(k)
     #ss=np.array(ss)
     for i in range(len(ss)):
-        print sls[i], ss[i].mean(), 'CI [%.3f,%.3f]'%(sap(ss[i],2.5),sap(ss[i],97.5)) 
+        print(sls[i], ss[i].mean(), 'CI [%.3f,%.3f]'%(sap(ss[i],2.5),sap(ss[i],97.5)))
 def printCI(w,var=None,decimals=3):
     sfmt=' {:.{:d}f} [{:.{:d}f},{:.{:d}f}]'
     def _print(b):
         d=np.round([np.median(b), sap(b,2.5),sap(b,97.5)],decimals).tolist()
-        print sfmt.format(d[0],decimals,d[1],decimals,d[2],decimals)
+        print(sfmt.format(d[0],decimals,d[1],decimals,d[2],decimals))
         #print var+' %.3f, CI %.3f, %.3f'%tuple(d) 
     if var is None: d=w;var='var'
     else: d=w[var]
@@ -289,24 +317,23 @@ def printCI(w,var=None,decimals=3):
             _print(d[:,i])
     elif d.ndim==1: _print(d)
     
-    
                 
-def saveStanFit(fit,fname='test'):      
+def saveStanFit(fit,fname='test'):     
     if fname.count(os.path.sep): path=''
     else: path = os.getcwd()+os.path.sep+'standata'+os.path.sep
     try: os.mkdir(path)
     except: OSError
     w=fit.extract()
-    f=open(path+fname+'.stanfit','w')
+    f=open(path+fname+'.stanfit','wb')
     pickle.dump(w,f)
     f.close()
     f=open(path+fname+'.check','w')
-    print >> f,fit
+    f.write(str(fit))
     f.close()
 def loadStanFit(fname):
     if fname.count(os.path.sep): path=''
     else: path = os.getcwd()+os.path.sep+'standata'+os.path.sep
-    f=open(path+fname+'.stanfit','r')
+    f=open(path+fname+'.stanfit','rb')
     out=pickle.load(f)
     f.close()
     return out
@@ -322,14 +349,15 @@ def ndarray2latextable(array,decim=2):
         for j in range(shp[1]):
             if type(decim) is list: dc=decim[j]
             else: dc=decim
-            if dc==0: out+='%d'%int(array[i,j])
+            if type(array[i,j])==np.str_: out+='%s'%array[i,j]
+            elif dc==0: out+='%d'%int(array[i,j])
             else:
                 flt='{: .%df}'%dc
                 out+=flt.format(np.round(array[i,j],dc))
             if j<shp[1]-1: out+=' & '
         out+=ecol
     out+='\\hline\n\\end{tabular}\n\\end{table}'
-    print out
+    print(out)
     
 def ndsamples2latextable(data,decim=2):
     ''' data - 3D numpy.ndarray with shape (rows,columns,samples)'''
@@ -344,7 +372,7 @@ def ndsamples2latextable(data,decim=2):
             if j<data.shape[1]-1: out+=' & '
         out+=ecol
     out+='\\hline\n\\end{tabular}\n\\end{table}'
-    print out
+    print(out)
 
 
 def ndarray2gif(path,array,duration=0.1,addblank=False,
@@ -393,7 +421,7 @@ def ndarray2gif(path,array,duration=0.1,addblank=False,
     if suf=='gif': os.system('convert -delay %f temp*.png %s.gif'%(duration,path))
     elif suf=='avi':
         cmd='avconv -r '+str(int(1/duration))+ ' -i temp%04d.png -c:v h264 '+path+'.avi'
-        print cmd
+        print(cmd)
         os.system(cmd)
     else: raise ValueError
     shp=array.shape[0]
@@ -453,5 +481,16 @@ def plotGifGrid(dat,fn='test',bcgclr=0,forclr=None,text=[],duration=0.1,
     ndarray2gif(fn,np.uint8(R*255),duration=duration,
                 plottime=plottime,snapshot=snapshot,
                 UC=np.uint8(bcgclr*255),LC=np.uint8(255-bcgclr*255))
-    
+def printProgress(iteration, total, time,prefix='', decimals=1, bar_length=30):
+    str_format = "{0:." + str(decimals) + "f}"
+    percents = str_format.format(100 * (iteration / float(total)))
+    filled_length = int(round(bar_length * iteration / float(total)))
+    bar = 'O' * filled_length + '-' * (bar_length - filled_length)
+    if iteration>0:
+        suffix=" ETA "+str_format.format(time*(total/iteration-1)/60.)+ 'mins'
+    else: suffix=''
+    stdout.write('\r%s |%s| %s%s %s' % (prefix, bar, percents, '%', suffix))
+    if iteration == total:
+        stdout.write('\n')
+    stdout.flush()  
 
