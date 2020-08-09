@@ -19,8 +19,9 @@ CLR=(0.2, 0.5, 0.6)
 # size of figure columns
 FIGCOL=[3.27,4.86,6.83] # plosone
 FIGCOL=[3.3,5, 7.1] # frontiers
-FIGCOL=[2.87,4.3,5.74]# peerj
 FIGCOL=[3.3,5,7.1] # plosone new
+FIGCOL=[2.87,4.3,5.74,9]# peerj
+
 
 SMALL=6
 MEDIUM=9
@@ -135,7 +136,7 @@ def plothistCI(a,b,l,u):
         >>> plothistCI(a,b,l,u)
     '''
     b=b[:-1]+np.diff(b)/2.
-    plt.plot(b,a,color=CLR)
+    plt.plot(b,a)
     x=np.concatenate([b,b[::-1]])
     ci=np.concatenate([u,l[::-1]])
     plt.gca().add_patch(plt.Polygon(np.array([x,ci]).T,
@@ -212,7 +213,7 @@ def subplotAnnotate(loc='nw',nr=None,clr='k'):
     if nr is None: nr=ax.colNum*ax.numRows+ax.rowNum
     plt.text(plt.xlim()[0]+ofs[0]*(plt.xlim()[1]-plt.xlim()[0]),
             plt.ylim()[0]+ofs[1]*(plt.ylim()[1]-plt.ylim()[0]), 
-            str(unichr(65+nr)),horizontalalignment='center',verticalalignment='center',
+            str(chr(65+nr)),horizontalalignment='center',verticalalignment='center',
             fontdict={'weight':'bold'},fontsize=12,color=clr)
 
 def _errorbar(out,x,clr='k'):
@@ -231,7 +232,7 @@ def _horebar(d,xs,clr):
         plt.plot([np.median(d[:,i])],[x],mfc=clr,mec=clr,ms=8,marker='|',mew=2)
     plt.gca().set_yticks(xs)
 
-def plotCIttest1(y,x=0,alpha=0.05,clr='k'):
+def plotCIttest1(y,x=0,alpha=0.05,clr=CLR):
     ''' single group t-test'''
     m=y.mean();df=y.size-1
     se=y.std()/y.size**0.5
@@ -254,7 +255,7 @@ def plotCIttest2(y1,y2,x=0,alpha=0.05,clr='k'):
     _errorbar(out,x=x,clr=clr)
     return out
     
-def errorbar(y,clr=CLR,x=None,labels=None):
+def errorbar(y,clr=CLR,x=None,labels=None,plot=True):
     ''' customized error bars
         y - NxM ndarray containing results of
             N simulations of M random variables
@@ -276,10 +277,11 @@ def errorbar(y,clr=CLR,x=None,labels=None):
     for i in range(d.shape[1]):
         out.append([np.median(d[:,i]),sap(d[:,i],2.5),sap(d[:,i],97.5),
                     sap(d[:,i],25),sap(d[:,i],75)])
-        _errorbar(out[-1],x=x[i],clr=clr)
-    ax.set_xticks(x)
-    if not labels is None: ax.set_xticklabels(labels)
-    plt.xlim([np.floor(np.min(x)-1),np.ceil(np.max(x)+1)])
+        if plot: _errorbar(out[-1],x=x[i],clr=clr)
+    if plot:
+        ax.set_xticks(x)
+        if not labels is None: ax.set_xticklabels(labels)
+        plt.xlim([np.floor(np.min(x)-1),np.ceil(np.max(x)+1)])
     return np.array(out)
 
 def pystanErrorbar(w,keys=None):
@@ -338,24 +340,29 @@ def loadStanFit(fname):
     f.close()
     return out
 
-def ndarray2latextable(array,decim=2):
+def ndarray2latextable(array,decim=2,hline=[0],vline=None,nl=1):
     ''' array - 2D numpy.ndarray with shape (rows,columns)
         decim - decimal precision of float, use 0 for ints
             should be int scalar or a list of list,len(decim)=nr cols
     '''
     ecol=' \\\\\n';shp=array.shape
-    out='\\begin{table}\n\\centering\n\\begin{tabular}{|l|'+shp[1]*'c|'+'}\n\\hline\n'
+    out='\\begin{table}\n\\centering\n\\begin{tabular}{|'
+    if vline is None: vline=range(shp[1])
+    for i in range(shp[1]):
+        out+=['c','l'][int(i<nl)]+['','|'][int(i in set(vline))]
+    out=out+'|}\n\\hline\n'
     for i in range(shp[0]):
         for j in range(shp[1]):
             if type(decim) is list: dc=decim[j]
             else: dc=decim
-            if type(array[i,j])==np.str_: out+='%s'%array[i,j]
+            if type(array[i,j])==np.str_ or type(array[i,j])==str: out+='%s'%array[i,j]
             elif dc==0: out+='%d'%int(array[i,j])
             else:
                 flt='{: .%df}'%dc
                 out+=flt.format(np.round(array[i,j],dc))
             if j<shp[1]-1: out+=' & '
         out+=ecol
+        if hline.count(i)==1: out+='\\hline\n'
     out+='\\hline\n\\end{tabular}\n\\end{table}'
     print(out)
     
